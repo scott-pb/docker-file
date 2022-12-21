@@ -59,6 +59,8 @@ COPY php.tar.xz  /usr/src
 
 COPY php-amqp.tar.gz /usr/src
 
+COPY php-ext-encry-1.0.tar.gz /usr/src
+
 COPY docker-php-ext-* docker-php-entrypoint /usr/local/bin/
 
 RUN set -eux; \
@@ -193,9 +195,26 @@ RUN set -eux; \
 	} | tee php-fpm.d/zz-docker.conf
 
 RUN  set -eux; \
-	apk add libpng-dev zlib-dev; \
+	apk add --no-cache --virtual .build-deps \
+	$PHPIZE_DEPS \
+	tar; \
+	mkdir -p /usr/src/php-ext-encry-1.0; \
+	tar -zxvf /usr/src/php-ext-encry-1.0.tar.gz -C /usr/src; \
+	cd  /usr/src/php-ext-encry-1.0; \
+	/usr/local/bin/phpize; \
+	./configure  --with-php-config=/usr/local/bin/php-config; \
+	make -j "$(nproc)"; \
+	make install; \
+	pecl update-channels; \
+	pecl install swoole ;\
+	rm -rf /usr/src/php-ext-encry*; \
+	rm -rf /usr/src/php-amqp*; \
+	rm -rf /tmp/pear ~/.pearrc; \
+	apk del --no-network .build-deps; \
+	apk add  libpng-dev zlib-dev libstdc++; \
 	docker-php-ext-install gd; \
-	docker-php-ext-enable gd xdebug
+	docker-php-ext-enable gd yaoling_encrypt  swoole
+
 
 ENTRYPOINT ["docker-php-entrypoint"]
 
