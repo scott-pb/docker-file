@@ -17,12 +17,14 @@ services:
     networks:
       - web-net
   php:
-    image: scottpb/php8.1.13:v1.0.3
+    image: scottpb/php8.1.13:xdebug
     container_name: php
     restart: always
     privileged: true
     cap_add: [SYS_PTRACE]
     working_dir: /var/www
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       [
         /Users/pengbin/workspace:/var/www,
