@@ -59,7 +59,7 @@ COPY php.tar.xz  /usr/src
 
 COPY php-amqp.tar.gz /usr/src
 
-COPY php-ext-encry-1.0.tar.gz /usr/src
+COPY php-ext-encry-1.0.1.tar.gz /usr/src
 
 COPY docker-php-ext-* docker-php-entrypoint /usr/local/bin/
 
@@ -88,7 +88,10 @@ RUN set -eux; \
 	cmake \
 	rabbitmq-c-dev \
 	zlib-dev \
-	libpng-dev; \
+	libpng-dev \
+	tzdata; \
+	cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime;\
+	echo "Asia/Shanghai" > /etc/timezone;\
 	rm -vf /usr/include/iconv.h; \
 	export \
 	CFLAGS="$PHP_CFLAGS" \
@@ -135,11 +138,17 @@ RUN set -eux; \
 	./configure  --with-php-config=/usr/local/bin/php-config; \
 	make -j "$(nproc)"; \
 	make install; \
+	mkdir -p /usr/src/php-ext-encry-1.0.1; \
+	tar -zxvf /usr/src/php-ext-encry-1.0.1.tar.gz -C /usr/src; \
+	cd  /usr/src/php-ext-encry-1.0.1; \
+	/usr/local/bin/phpize; \
+	./configure  --with-php-config=/usr/local/bin/php-config; \
+	make -j "$(nproc)"; \
+	make install; \
 	docker-php-ext-install \
 	${PHP_INSTALL}; \
 	pecl update-channels; \
 	pecl install mcrypt \
-	xdebug \
 	protobuf \
 	redis ;\
 	docker-php-source delete; \
@@ -148,6 +157,7 @@ RUN set -eux; \
 	mcrypt \
 	protobuf \
 	redis \
+	yaoling_encrypt \
 	exif; \
 	runDeps="$( \
 	scanelf --needed --nobanner --format '%n#p' --recursive /usr/local \
@@ -157,6 +167,8 @@ RUN set -eux; \
 	)"; \
 	apk add --no-cache $runDeps; \
 	apk del --no-network .build-deps; \
+	rm -rf /usr/src/php-ext-encry*; \
+	rm -rf /usr/src/php-amqp*; \
 	rm -rf /tmp/pear ~/.pearrc; \
 	php --version;\
 	cd /usr/local/etc; \
@@ -195,25 +207,15 @@ RUN set -eux; \
 	} | tee php-fpm.d/zz-docker.conf
 
 RUN  set -eux; \
-	apk add --no-cache --virtual .build-deps \
-	$PHPIZE_DEPS \
-	tar; \
-	mkdir -p /usr/src/php-ext-encry-1.0; \
-	tar -zxvf /usr/src/php-ext-encry-1.0.tar.gz -C /usr/src; \
-	cd  /usr/src/php-ext-encry-1.0; \
-	/usr/local/bin/phpize; \
-	./configure  --with-php-config=/usr/local/bin/php-config; \
-	make -j "$(nproc)"; \
-	make install; \
-	pecl update-channels; \
-	pecl install swoole ;\
-	rm -rf /usr/src/php-ext-encry*; \
-	rm -rf /usr/src/php-amqp*; \
-	rm -rf /tmp/pear ~/.pearrc; \
-	apk del --no-network .build-deps; \
-	apk add  libpng-dev zlib-dev libstdc++; \
+	apk add  libpng-dev zlib-dev ; \
 	docker-php-ext-install gd; \
-	docker-php-ext-enable gd yaoling_encrypt  swoole
+	apk add --no-cache --virtual .build-deps \
+	$PHPIZE_DEPS linux-headers; \
+	pecl update-channels; \
+	pecl install xdebug; \
+	docker-php-ext-enable gd xdebug ;\
+	apk del --no-network .build-deps ;\
+	rm -rf /tmp/pear ~/.pearrc
 
 
 ENTRYPOINT ["docker-php-entrypoint"]
