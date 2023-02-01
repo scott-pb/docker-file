@@ -59,7 +59,7 @@ COPY php.tar.xz  /usr/src
 
 COPY php-amqp.tar.gz /usr/src
 
-COPY php-ext-encry-1.0.1.tar.gz /usr/src
+COPY php-ext-encry-1.0.tar.gz /usr/src
 
 COPY docker-php-ext-* docker-php-entrypoint /usr/local/bin/
 
@@ -138,9 +138,9 @@ RUN set -eux; \
 	./configure  --with-php-config=/usr/local/bin/php-config; \
 	make -j "$(nproc)"; \
 	make install; \
-	mkdir -p /usr/src/php-ext-encry-1.0.1; \
-	tar -zxvf /usr/src/php-ext-encry-1.0.1.tar.gz -C /usr/src; \
-	cd  /usr/src/php-ext-encry-1.0.1; \
+	mkdir -p /usr/src/php-ext-encry-1.0; \
+	tar -zxvf /usr/src/php-ext-encry-1.0.tar.gz -C /usr/src; \
+	cd  /usr/src/php-ext-encry-1.0; \
 	/usr/local/bin/phpize; \
 	./configure  --with-php-config=/usr/local/bin/php-config; \
 	make -j "$(nproc)"; \
