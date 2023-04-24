@@ -1,0 +1,23 @@
+version: "3.3"
+services:
+  nginx:
+    image: nginx
+    restart: always
+    container_name: nginx
+    privileged: true
+    ports: ["81:80"]
+    working_dir: /home/www-data
+    tty: true
+    networks:
+      - scott-web-net
+  php:
+    image: php8.1.13:debian
+    container_name: php
+    restart: always
+    privileged: true
+    cap_add: [SYS_PTRACE]
+    working_dir: /home/www-data
+    networks:
+      - scott-web-net
+networks:
+  scott-web-net:
