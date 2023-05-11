@@ -1,16 +1,65 @@
-FROM alpine:3.17
+#
+# NOTE: THIS DOCKERFILE IS GENERATED VIA "apply-templates.sh"
+#
+# PLEASE DO NOT EDIT IT DIRECTLY.
+#
 
+FROM debian:buster-slim
+
+# prevent Debian's PHP packages from being installed
+# https://github.com/docker-library/php/pull/542
+RUN set -eux; \
+	{ \
+	echo 'Package: php*'; \
+	echo 'Pin: release *'; \
+	echo 'Pin-Priority: -1'; \
+	} > /etc/apt/preferences.d/no-debian-php
+
+# dependencies required for running "phpize"
+# (see persistent deps below)
 ENV PHPIZE_DEPS \
 	autoconf \
 	dpkg-dev \
-	dpkg \
 	file \
 	g++ \
 	gcc \
 	libc-dev \
 	make \
-	pkgconf \
-	re2c 
+	pkg-config \
+	re2c
+
+# persistent / runtime deps
+RUN set -eux; \
+	# echo "# 默认注释了源码镜像以提高 apt update 速度，如有需要可自行取消注释" > /etc/apt/sources.list;\
+	# echo "deb https://mirrors.tuna.tsinghua.edu.cn/debian/ buster main contrib non-free" >> /etc/apt/sources.list;\
+	# echo "deb-src https://mirrors.tuna.tsinghua.edu.cn/debian/ buster main contrib non-free" >> /etc/apt/sources.list;\
+	# echo "deb https://mirrors.tuna.tsinghua.edu.cn/debian/ buster-updates main contrib non-free" >> /etc/apt/sources.list;\
+	# echo "deb-src https://mirrors.tuna.tsinghua.edu.cn/debian/ buster-updates main contrib non-free" >>  etc/apt/sources.list; \
+	# echo "deb https://mirrors.tuna.tsinghua.edu.cn/debian/ buster-backports main contrib non-free" >> /etc/apt/sources.list;\
+	# echo "deb-src https://mirrors.tuna.tsinghua.edu.cn/debian/ buster-backports main contrib non-free" >> /etc/apt/sources.list;\
+	# echo "deb https://mirrors.tuna.tsinghua.edu.cn/debian-security buster/updates main contrib non-free" >> /etc/apt/sources.list;\
+	# echo "deb-src https://mirrors.tuna.tsinghua.edu.cn/debian-security buster/updates main contrib non-free" >>  /etc/apt/sources.list; \
+	apt-get update; \
+	apt-get install -y --no-install-recommends \
+	$PHPIZE_DEPS \
+	ca-certificates \
+	curl \
+	xz-utils \
+	openssl \
+	libargon2-dev \
+	coreutils \
+	libticonv-dev \
+	libsodium-dev \
+	libxml2-dev \
+	libmcrypt-dev \
+	libzip-dev \
+	cmake \
+	librabbitmq-dev \
+	libpng-dev \
+	tzdata; \
+	cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime;\
+	echo "Asia/Shanghai" > /etc/timezone;\
+	rm -rf /var/lib/apt/lists/*
 
 ENV PHP_INI_DIR /usr/local/etc/php
 
@@ -21,6 +70,11 @@ ENV PHP_CFLAGS="-fstack-protector-strong -fpic -fpie -O2 -D_LARGEFILE_SOURCE -D_
 ENV PHP_CPPFLAGS="$PHP_CFLAGS"
 
 ENV PHP_LDFLAGS="-Wl,-O1 -pie"
+
+ENV ENCRY_VERSION=3.0
+
+ENV CPP_ENCRY_FILE="yaoling_encrypt_plus-${ENCRY_VERSION}"
+
 
 ENV PHP_INSTALL \
 	bcmath \
@@ -39,19 +93,15 @@ ENV PHP_INSTALL \
 	gettext \
 	exif
 
-# persistent / runtime deps
+
 RUN set -eux; \
-	#sed -i 's/dl-cdn.alpinelinux.org/mirrors.tuna.tsinghua.edu.cn/g' /etc/apk/repositories; \
-	sed -i 's/dl-cdn.alpinelinux.org/mirrors.ustc.edu.cn/g' /etc/apk/repositories; \
-	#sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories; \
-	adduser -u 82 -D -S -G www-data www-data; \
 	mkdir -p "$PHP_INI_DIR/conf.d"; \
+	# allow running as an arbitrary user (https://github.com/docker-library/php/issues/743)
 	[ ! -d /var/www ]; \
 	mkdir -p /var/www; \
 	chown www-data:www-data /var/www; \
-	chmod 777 /var/www; \
-	[ ! -d /usr/src ]; \
-	mkdir -p /usr/src
+	chmod 777 /var/www; 
+
 
 COPY docker-php-source /usr/local/bin/
 
@@ -59,40 +109,27 @@ COPY php.tar.xz  /usr/src
 
 COPY php-amqp.tar.gz /usr/src
 
-COPY php-ext-encry-1.0.tar.gz /usr/src
+#COPY "php-ext-encry-${ENCRY_VERSION}.tar.gz" /usr/src
+
+COPY "${CPP_ENCRY_FILE}.tar.gz" /usr/src
 
 COPY docker-php-ext-* docker-php-entrypoint /usr/local/bin/
 
 RUN set -eux; \
-	apk add --no-cache --virtual .build-deps \
-	$PHPIZE_DEPS \
-	ca-certificates \
-	curl \
-	tar \
-	xz \
-	openssl \
-	argon2-dev \
-	coreutils \
-	curl-dev \
-	gnu-libiconv-dev \
+	\
+	savedAptMark="$(apt-mark showmanual)"; \
+	apt-get update; \
+	apt-get install -y --no-install-recommends \
+	libargon2-dev \
+	libcurl4-openssl-dev \
+	libonig-dev \
+	libreadline-dev \
 	libsodium-dev \
+	libsqlite3-dev \
+	libssl-dev \
 	libxml2-dev \
-	linux-headers \
-	oniguruma-dev \
-	openssl-dev \
-	readline-dev \
-	sqlite-dev \
-	gettext-dev \
-	libmcrypt-dev \
-	libzip-dev \
-	cmake \
-	rabbitmq-c-dev \
-	zlib-dev \
-	libpng-dev \
-	tzdata; \
-	cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime;\
-	echo "Asia/Shanghai" > /etc/timezone;\
-	rm -vf /usr/include/iconv.h; \
+	zlib1g-dev \
+	; \
 	export \
 	CFLAGS="$PHP_CFLAGS" \
 	CPPFLAGS="$PHP_CPPFLAGS" \
@@ -101,6 +138,11 @@ RUN set -eux; \
 	docker-php-source extract; \
 	cd /usr/src/php; \
 	gnuArch="$(dpkg-architecture --query DEB_BUILD_GNU_TYPE)"; \
+	debMultiarch="$(dpkg-architecture --query DEB_BUILD_MULTIARCH)"; \
+	# https://bugs.php.net/bug.php?id=74125
+	if [ ! -d /usr/include/curl ]; then \
+	ln -sT "/usr/include/$debMultiarch/curl" /usr/local/include/curl; \
+	fi; \
 	./configure \
 	--build="$gnuArch" \
 	--with-config-file-path="$PHP_INI_DIR" \
@@ -116,7 +158,7 @@ RUN set -eux; \
 	--with-pdo-sqlite=/usr \
 	--with-sqlite3=/usr \
 	--with-curl \
-	--with-iconv=/usr \
+	--with-iconv \
 	--with-openssl \
 	--with-readline \
 	--with-zlib \
@@ -127,6 +169,7 @@ RUN set -eux; \
 	--enable-fpm \
 	--with-fpm-user=www-data \
 	--with-fpm-group=www-data \
+	--enable-fd-setsize=3096 \
 	; \
 	make -j "$(nproc)"; \
 	make install; \
@@ -138,9 +181,9 @@ RUN set -eux; \
 	./configure  --with-php-config=/usr/local/bin/php-config; \
 	make -j "$(nproc)"; \
 	make install; \
-	mkdir -p /usr/src/php-ext-encry-1.0; \
-	tar -zxvf /usr/src/php-ext-encry-1.0.tar.gz -C /usr/src; \
-	cd  /usr/src/php-ext-encry-1.0; \
+	mkdir -p "/usr/src/${CPP_ENCRY_FILE}"; \
+	tar -zxvf "/usr/src/${CPP_ENCRY_FILE}.tar.gz" -C /usr/src; \
+	cd  "/usr/src/${CPP_ENCRY_FILE}"; \
 	/usr/local/bin/phpize; \
 	./configure  --with-php-config=/usr/local/bin/php-config; \
 	make -j "$(nproc)"; \
@@ -157,7 +200,7 @@ RUN set -eux; \
 	mcrypt \
 	protobuf \
 	redis \
-	yaoling_encrypt \
+	yaoling_encrypt_plus \
 	exif; \
 	runDeps="$( \
 	scanelf --needed --nobanner --format '%n#p' --recursive /usr/local \
@@ -165,17 +208,32 @@ RUN set -eux; \
 	| sort -u \
 	| awk 'system("[ -e /usr/local/lib/" $1 " ]") == 0 { next } { print "so:" $1 }' \
 	)"; \
-	apk add --no-cache $runDeps; \
-	apk del --no-network .build-deps; \
-	rm -rf /usr/src/php-ext-encry*; \
+	apt-get install -y --no-install-recommends  $runDeps; \
+	rm -rf /var/lib/apt/lists/* \
+	rm -rf /usr/src/${CPP_ENCRY_FILE}*; \
 	rm -rf /usr/src/php-amqp*; \
 	rm -rf /tmp/pear ~/.pearrc; \
-	php --version;\
+	php --version;
+
+COPY docker-php-ext-* docker-php-entrypoint /usr/local/bin/
+
+# sodium was built as a shared module (so that it can be replaced later if so desired), so let's enable it too (https://github.com/docker-library/php/issues/598)
+RUN docker-php-ext-enable sodium
+
+ENTRYPOINT ["docker-php-entrypoint"]
+WORKDIR /home/www-data
+
+RUN set -eux; \
+	apt-get update;\
+	apt-get install nodejs npm -y;\
+	npm install pm2 -g;\
 	cd /usr/local/etc; \
 	if [ -d php-fpm.d ]; then \
+	# for some reason, upstream's php-fpm.conf.default has "include=NONE/etc/php-fpm.d/*.conf"
 	sed 's!=NONE/!=!g' php-fpm.conf.default | tee php-fpm.conf > /dev/null; \
 	cp php-fpm.d/www.conf.default php-fpm.d/www.conf; \
 	else \
+	# PHP 5.x doesn't use "include=" by default, so we'll create our own simple config that mimics PHP 7+ for consistency
 	mkdir php-fpm.d; \
 	cp php-fpm.conf.default php-fpm.d/www.conf; \
 	{ \
@@ -204,24 +262,21 @@ RUN set -eux; \
 	echo; \
 	echo '[www]'; \
 	echo 'listen = 9000'; \
-	} | tee php-fpm.d/zz-docker.conf
+	} | tee php-fpm.d/zz-docker.conf; \
+	mkdir -p "$PHP_INI_DIR/conf.d"; \
+	{ \
+	echo '; https://github.com/docker-library/php/issues/878#issuecomment-938595965'; \
+	echo 'fastcgi.logging = Off'; \
+	} > "$PHP_INI_DIR/conf.d/docker-fpm.ini"
 
-RUN  set -eux; \
-	apk add  libpng-dev zlib-dev ; \
-	docker-php-ext-install gd; \
-	apk add --no-cache --virtual .build-deps \
-	$PHPIZE_DEPS linux-headers; \
-	pecl update-channels; \
-	pecl install xdebug; \
-	docker-php-ext-enable gd xdebug ;\
-	apk del --no-network .build-deps ;\
-	rm -rf /tmp/pear ~/.pearrc
+# RUN set -eux; \
+# 	cd $PHP_INI_DIR; \
+# 	sed -i  's/pm = dynamic/pm = static/g' "$PHP_INI_DIR/php-fpm.d/www.conf"; \
+# 	sed -i  's/pm.max_children = 5/pm.max_children = 10 /g' "$PHP_INI_DIR/php-fpm.d/www.conf";\
+# 	sed -i  's/expose_php = On/expose_php = Off /g' "$PHP_INI_DIR/php.ini";
 
-
-ENTRYPOINT ["docker-php-entrypoint"]
-
-WORKDIR /var/www
-
+# Override stop signal to stop process gracefully
+# https://github.com/php/php-src/blob/17baa87faddc2550def3ae7314236826bc1b1398/sapi/fpm/php-fpm.8.in#L163
 STOPSIGNAL SIGQUIT
 
 EXPOSE 9000
