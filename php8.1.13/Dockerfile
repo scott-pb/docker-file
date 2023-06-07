@@ -71,7 +71,7 @@ ENV PHP_CPPFLAGS="$PHP_CFLAGS"
 
 ENV PHP_LDFLAGS="-Wl,-O1 -pie"
 
-ENV ENCRY_VERSION=3.0
+ENV ENCRY_VERSION=3.1
 
 ENV CPP_ENCRY_FILE="yaoling_encrypt_plus-${ENCRY_VERSION}"
 
@@ -174,6 +174,7 @@ RUN set -eux; \
 	make -j "$(nproc)"; \
 	make install; \
 	cp -v php.ini-* "$PHP_INI_DIR/"; \
+	cp -v php.ini-production "$PHP_INI_DIR/php.ini"; \
 	cd /usr/src; \
 	tar -zxvf /usr/src/php-amqp.tar.gz; \
 	cd /usr/src/php-amqp-1.11.0; \
@@ -267,13 +268,16 @@ RUN set -eux; \
 	{ \
 	echo '; https://github.com/docker-library/php/issues/878#issuecomment-938595965'; \
 	echo 'fastcgi.logging = Off'; \
-	} > "$PHP_INI_DIR/conf.d/docker-fpm.ini"
+	} > "$PHP_INI_DIR/conf.d/docker-fpm.ini";
 
-# RUN set -eux; \
-# 	cd $PHP_INI_DIR; \
-# 	sed -i  's/pm = dynamic/pm = static/g' "$PHP_INI_DIR/php-fpm.d/www.conf"; \
-# 	sed -i  's/pm.max_children = 5/pm.max_children = 10 /g' "$PHP_INI_DIR/php-fpm.d/www.conf";\
-# 	sed -i  's/expose_php = On/expose_php = Off /g' "$PHP_INI_DIR/php.ini";
+
+RUN set -eux; \
+	export CPU_COUNT="$(nproc)"; \
+    export FIVE_CPU=$(expr $CPU_COUNT \* 5); \
+	sed -i  "s/pm.max_children = 5/pm.max_children = $FIVE_CPU/g" "/usr/local/etc/php-fpm.d/www.conf"; \
+	sed -i  's/pm = dynamic/pm = static/g' "/usr/local/etc/php-fpm.d/www.conf"; \
+	sed -i  's/expose_php = On/expose_php = Off /g' "$PHP_INI_DIR/php.ini"; \
+	echo 'yaoling.encrypt_path=/home/www-data/pms/app/Service' >> /usr/local/etc/php/conf.d/docker-php-ext-yaoling_encrypt_plus.ini; 
 
 # Override stop signal to stop process gracefully
 # https://github.com/php/php-src/blob/17baa87faddc2550def3ae7314236826bc1b1398/sapi/fpm/php-fpm.8.in#L163
