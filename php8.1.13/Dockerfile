@@ -73,7 +73,11 @@ ENV PHP_LDFLAGS="-Wl,-O1 -pie"
 
 ENV ENCRY_VERSION=3.1.1
 
+ENV SKYWALKING_VERSION=1.0.0
+
 ENV CPP_ENCRY_FILE="yaoling_encrypt_plus-${ENCRY_VERSION}"
+
+ENV RUST_SKYWALKING_FILE="php-skywalking-agent-${SKYWALKING_VERSION}"
 
 
 ENV PHP_INSTALL \
@@ -109,9 +113,9 @@ COPY php.tar.xz  /usr/src
 
 COPY php-amqp.tar.gz /usr/src
 
-#COPY "php-ext-encry-${ENCRY_VERSION}.tar.gz" /usr/src
-
 COPY "${CPP_ENCRY_FILE}.tar.gz" /usr/src
+
+COPY "${RUST_SKYWALKING_FILE}.tar.gz" /usr/src
 
 COPY docker-php-ext-* docker-php-entrypoint /usr/local/bin/
 
@@ -278,6 +282,39 @@ RUN set -eux; \
 	sed -i  's/pm = dynamic/pm = static/g' "/usr/local/etc/php-fpm.d/www.conf"; \
 	sed -i  's/expose_php = On/expose_php = Off /g' "$PHP_INI_DIR/php.ini"; \
 	echo 'yaoling.encrypt_path=/home/www-data/pms/app/Services' >> /usr/local/etc/php/conf.d/docker-php-ext-yaoling_encrypt_plus.ini; 
+
+ENV RUSTUP_HOME=/usr/local/rustup \
+    CARGO_HOME=/usr/local/cargo \
+    PATH=/usr/local/cargo/bin:$PATH \
+    RUST_VERSION=1.65.0
+
+#skywalking_agent
+RUN set -eux; \
+	apt-get update; \
+	apt-get install -y wget gcc make llvm-13-dev libclang-13-dev protobuf-compiler; \
+	wget https://static.rust-lang.org/rustup/archive/1.25.1/x86_64-unknown-linux-gnu/rustup-init; \
+	chmod +x rustup-init; \
+	./rustup-init -y --no-modify-path --profile minimal --default-toolchain $RUST_VERSION --default-host x86_64-unknown-linux-gnu; \
+	rm rustup-init; \
+	chmod -R a+w $RUSTUP_HOME $CARGO_HOME; \
+	mkdir -p "/usr/src/${RUST_SKYWALKING_FILE}"; \
+	tar -zxvf "/usr/src/${RUST_SKYWALKING_FILE}.tar.gz" -C /usr/src; \
+	cd  "/usr/src/${RUST_SKYWALKING_FILE}"; \
+	/usr/local/bin/phpize; \
+	./configure  --with-php-config=/usr/local/bin/php-config; \
+	make -j "$(nproc)"; \
+	make install; \
+	docker-php-ext-enable skywalking_agent; \
+	apt-get remove -y --auto-remove wget protobuf-compiler; \
+	rm -rf /var/lib/apt/lists/*; \
+	rm -rf /usr/src/${RUST_SKYWALKING_FILE}* ;
+
+#composer
+RUN set -eux; \
+	php -r "copy('https://install.phpcomposer.com/installer', 'composer-setup.php');" ;\
+	php composer-setup.php; \
+	php -r "unlink('composer-setup.php');"; \
+	mv composer.phar /usr/local/bin/composer; 
 
 # Override stop signal to stop process gracefully
 # https://github.com/php/php-src/blob/17baa87faddc2550def3ae7314236826bc1b1398/sapi/fpm/php-fpm.8.in#L163
